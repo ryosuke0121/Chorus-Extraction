@@ -9,7 +9,7 @@ import pytest
 
 from chorus_extraction.config import build_run_config
 from chorus_extraction.errors import SeparationError
-from chorus_extraction.pipeline import extract, separate_song, separate_vocal
+from chorus_extraction.pipeline import extract, separate_full, separate_song, separate_vocal
 
 
 def _make_cfg(tmp_path: Path, mode: str = "vocal", keep_intermediate: bool = False):
@@ -108,6 +108,59 @@ class TestSeparateSong:
             assert not (tmp_path / name).exists()
 
 
+class TestSeparateFull:
+    def test_returns_lead_chorus_and_all_stems(
+        self, tmp_path: Path, mock_separator, make_separate_fn, sample_wav: Path
+    ) -> None:
+        """separate_full が lead/chorus + 5 追加ステムを返す。"""
+        separate_fn = make_separate_fn(
+            [
+                "sample_Vocals_htdemucs_6s.wav",
+                "sample_Drums_htdemucs_6s.wav",
+                "sample_Bass_htdemucs_6s.wav",
+                "sample_Guitar_htdemucs_6s.wav",
+                "sample_Piano_htdemucs_6s.wav",
+                "sample_Other_htdemucs_6s.wav",
+            ],
+            ["sample_lead.wav", "sample_chorus.wav"],
+        )
+        cfg = _make_cfg(tmp_path, "full")
+
+        result = separate_full(sample_wav, cfg, separator=mock_separator, separate_fn=separate_fn)
+
+        assert result.lead_path is not None
+        assert result.chorus_path is not None
+        assert set(result.stems.keys()) == {"guitar", "bass", "drums", "keyboard", "other"}
+        assert len(result.all_output_paths) == 7  # lead + chorus + 5 stems
+
+    def test_stage1_vocals_missing_raises(
+        self, tmp_path: Path, mock_separator, make_separate_fn, sample_wav: Path
+    ) -> None:
+        """Stage1 出力に Vocals ステムがない場合は SeparationError。"""
+        separate_fn = make_separate_fn(
+            ["sample_Drums_htdemucs_6s.wav", "sample_Bass_htdemucs_6s.wav"],
+        )
+        cfg = _make_cfg(tmp_path, "full")
+
+        with pytest.raises(SeparationError, match="Vocals ステムが見つかりません"):
+            separate_full(sample_wav, cfg, separator=mock_separator, separate_fn=separate_fn)
+
+    def test_piano_renamed_to_keyboard(
+        self, tmp_path: Path, mock_separator, make_separate_fn, sample_wav: Path
+    ) -> None:
+        """Piano ステムが keyboard ラベルで返される。"""
+        separate_fn = make_separate_fn(
+            ["sample_Vocals_htdemucs_6s.wav", "sample_Piano_htdemucs_6s.wav"],
+            ["sample_lead.wav", "sample_chorus.wav"],
+        )
+        cfg = _make_cfg(tmp_path, "full")
+
+        result = separate_full(sample_wav, cfg, separator=mock_separator, separate_fn=separate_fn)
+
+        assert "keyboard" in result.stems
+        assert "piano" not in result.stems
+
+
 class TestExtract:
     def test_vocal_mode(self, tmp_path: Path, mock_separator, make_separate_fn, sample_wav: Path) -> None:
         separate_fn = make_separate_fn(["sample_lead.wav", "sample_chorus.wav"])
@@ -158,10 +211,12 @@ class TestExtract:
         assert results[0].lead_path is not None
         assert results[0].chorus_path is not None
 
-    def test_auto_mode_uses_song_pipeline(self, tmp_path: Path, mock_separator, make_separate_fn, sample_wav: Path) -> None:
-        """mode='auto' は 2 段階の song パイプラインとして動作する。"""
+    def test_auto_mode_uses_full_pipeline(self, tmp_path: Path, mock_separator, make_separate_fn, sample_wav: Path) -> None:
+        """mode='auto' は full パイプライン（マルチステム）として動作する。"""
         separate_fn = make_separate_fn(
-            ["sample_Vocals.wav", "sample_Instrumental.wav"],
+            ["sample_Vocals_htdemucs_6s.wav", "sample_Drums_htdemucs_6s.wav",
+             "sample_Bass_htdemucs_6s.wav", "sample_Guitar_htdemucs_6s.wav",
+             "sample_Piano_htdemucs_6s.wav", "sample_Other_htdemucs_6s.wav"],
             ["sample_lead.wav", "sample_chorus.wav"],
         )
         with patch("chorus_extraction.config._check_cuda", return_value=False):
@@ -183,6 +238,7 @@ class TestExtract:
         results = extract(cfg, separator=mock_separator, separate_fn=separate_fn)
         assert len(results) == 1
         assert results[0].lead_path is not None
+        assert results[0].stems  # full mode なのでステムが存在する
 
     def test_invalid_input_raises(self, tmp_path: Path, mock_separator, make_separate_fn) -> None:
         from chorus_extraction.errors import InvalidInputError

@@ -9,7 +9,7 @@ from typing import Literal, cast
 # ---------------------------------------------------------------------------
 # 型エイリアス
 # ---------------------------------------------------------------------------
-Mode = Literal["auto", "song", "vocal"]
+Mode = Literal["auto", "song", "vocal", "full"]
 Device = Literal["auto", "cuda", "cpu"]
 OutputFormat = Literal["wav", "mp3", "flac", "m4a", "ogg"]
 
@@ -24,7 +24,7 @@ class ModelSpec:
     name: str
     filename: str
     arch: str
-    role: Literal["stage1", "stage2"]
+    role: Literal["stage1", "stage2", "multi_stem"]
     description: str
 
 
@@ -32,13 +32,28 @@ class ModelSpec:
 # モデルレジストリ
 # ---------------------------------------------------------------------------
 MODEL_REGISTRY: dict[str, ModelSpec] = {
-    # Stage 1: ミックス → ボーカル抽出
+    # Multi-stem: ミックス → 全ステム同時分離（full mode 用）
+    "htdemucs-6s": ModelSpec(
+        name="htdemucs-6s",
+        filename="htdemucs_6s.yaml",
+        arch="demucs",
+        role="multi_stem",
+        description="Demucs v4 6ステム分離（vocals/drums/bass/guitar/piano/other、Full mode 既定）",
+    ),
+    # Stage 1: ミックス → ボーカル抽出（song mode 用）
+    "mel-roformer-vocals": ModelSpec(
+        name="mel-roformer-vocals",
+        filename="vocals_mel_band_roformer.ckpt",
+        arch="mel_band_roformer",
+        role="stage1",
+        description="MelBand Roformer ボーカル分離モデル by Kimberley Jensen（vocals SDR 12.6、Stage1 既定）",
+    ),
     "bs-roformer-vocals": ModelSpec(
         name="bs-roformer-vocals",
         filename="model_bs_roformer_ep_317_sdr_12.9755.ckpt",
         arch="bs_roformer",
         role="stage1",
-        description="BS-Roformer ボーカル分離モデル（SDR 12.97、Stage1 既定）",
+        description="BS-Roformer ボーカル分離モデル（vocals SDR 11.8）",
     ),
     # Stage 2: ボーカル → リード / ハモリ分離
     "mel-roformer-karaoke": ModelSpec(
@@ -46,7 +61,21 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         filename="mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt",
         arch="mel_band_roformer",
         role="stage2",
-        description="Mel-Band Roformer カラオケモデル aufr33/viperx（SDR 10.20、Stage2 既定）",
+        description="Mel-Band Roformer カラオケモデル aufr33/viperx（vocals SDR 8.4、Stage2 既定）",
+    ),
+    "mel-roformer-karaoke-gabox": ModelSpec(
+        name="mel-roformer-karaoke-gabox",
+        filename="mel_band_roformer_karaoke_gabox_v2.ckpt",
+        arch="mel_band_roformer",
+        role="stage2",
+        description="MelBand Roformer カラオケモデル by Gabox V2（SDR 未公表）",
+    ),
+    "mel-roformer-karaoke-becruily": ModelSpec(
+        name="mel-roformer-karaoke-becruily",
+        filename="mel_band_roformer_karaoke_becruily.ckpt",
+        arch="mel_band_roformer",
+        role="stage2",
+        description="MelBand Roformer カラオケモデル by becruily（SDR 未公表）",
     ),
     "uvr-bve": ModelSpec(
         name="uvr-bve",
@@ -71,7 +100,8 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
     ),
 }
 
-DEFAULT_STAGE1_MODEL = "bs-roformer-vocals"
+DEFAULT_MULTI_STEM_MODEL = "htdemucs-6s"
+DEFAULT_STAGE1_MODEL = "mel-roformer-vocals"
 DEFAULT_STAGE2_MODEL = "mel-roformer-karaoke"
 
 SUPPORTED_INPUT_EXTENSIONS: frozenset[str] = frozenset(
@@ -168,7 +198,7 @@ def _check_cuda() -> bool:
     return False
 
 
-_VALID_MODES: frozenset[str] = frozenset({"auto", "song", "vocal"})
+_VALID_MODES: frozenset[str] = frozenset({"auto", "song", "vocal", "full"})
 _VALID_DEVICES: frozenset[str] = frozenset({"auto", "cuda", "cpu"})
 _VALID_FORMATS: frozenset[str] = frozenset({"wav", "mp3", "flac", "m4a", "ogg"})
 
@@ -205,8 +235,9 @@ def build_run_config(
             f" 対応フォーマット: {', '.join(sorted(_VALID_FORMATS))}"
         )
 
-    # モデル解決
-    s1_key = stage1_model_name or DEFAULT_STAGE1_MODEL
+    # モデル解決（mode に応じてデフォルトを切り替え）
+    _is_full = mode in ("full", "auto")
+    s1_key = stage1_model_name or (DEFAULT_MULTI_STEM_MODEL if _is_full else DEFAULT_STAGE1_MODEL)
     s2_key = stage2_model_name or DEFAULT_STAGE2_MODEL
 
     if s1_key not in MODEL_REGISTRY:
@@ -222,10 +253,11 @@ def build_run_config(
             f" 利用可能: {available}"
         )
 
-    # ロール検証（stage1 モデルを stage2 に使う誤指定を早期検出）
-    if MODEL_REGISTRY[s1_key].role != "stage1":
+    # ロール検証
+    expected_s1_role = "multi_stem" if _is_full else "stage1"
+    if MODEL_REGISTRY[s1_key].role != expected_s1_role:
         raise InvalidInputError(
-            f"'{s1_key}' は Stage1 モデルではありません"
+            f"'{s1_key}' のロールが期待値 '{expected_s1_role}' と一致しません"
             f" (role={MODEL_REGISTRY[s1_key].role})。"
         )
     if MODEL_REGISTRY[s2_key].role != "stage2":

@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from chorus_extraction.config import (
+    DEFAULT_MULTI_STEM_MODEL,
     DEFAULT_STAGE1_MODEL,
     DEFAULT_STAGE2_MODEL,
     MODEL_REGISTRY,
@@ -24,7 +25,7 @@ class TestModelRegistry:
 
     def test_stage_roles(self) -> None:
         for spec in MODEL_REGISTRY.values():
-            assert spec.role in ("stage1", "stage2")
+            assert spec.role in ("stage1", "stage2", "multi_stem")
 
 
 class TestResolveDevice:
@@ -49,11 +50,33 @@ class TestResolveDevice:
 
 
 class TestBuildRunConfig:
-    def test_defaults(self, tmp_path: Path) -> None:
+    def test_defaults_full_mode(self, tmp_path: Path) -> None:
+        """full/auto モードでは multi-stem モデルが stage1 の既定になる。"""
         with patch("chorus_extraction.config._check_cuda", return_value=False):
             cfg = build_run_config(
                 inputs=[tmp_path / "a.wav"],
-                mode="auto",
+                mode="full",
+                output_dir=tmp_path / "out",
+                output_format="wav",
+                stage1_model_name=None,
+                stage2_model_name=None,
+                model_dir=tmp_path / "models",
+                keep_intermediate=False,
+                device="cpu",
+                lead_name_template="{stem}_lead",
+                chorus_name_template="{stem}_chorus",
+                verbosity=0,
+            )
+        assert cfg.stage1_model.name == DEFAULT_MULTI_STEM_MODEL
+        assert cfg.stage2_model.name == DEFAULT_STAGE2_MODEL
+        assert cfg.device == "cpu"
+
+    def test_defaults_song_mode(self, tmp_path: Path) -> None:
+        """song モードでは mel-roformer-vocals が stage1 の既定になる。"""
+        with patch("chorus_extraction.config._check_cuda", return_value=False):
+            cfg = build_run_config(
+                inputs=[tmp_path / "a.wav"],
+                mode="song",
                 output_dir=tmp_path / "out",
                 output_format="wav",
                 stage1_model_name=None,

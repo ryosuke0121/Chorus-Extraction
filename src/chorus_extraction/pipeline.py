@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from chorus_extraction.audio_io import build_output_names, intermediate_dir, validate_input
@@ -31,6 +31,8 @@ class ExtractionResult:
     """ハモリ（バッキングボーカル）の出力パス（取得できた場合）。"""
     all_output_paths: tuple[Path, ...]
     """分離で生成されたすべてのファイルパス。"""
+    stems: dict[str, Path] = field(default_factory=dict)
+    """full mode の追加ステム（guitar / bass / drums / keyboard / other）。"""
 
 
 def separate_vocal(
@@ -111,6 +113,88 @@ def separate_song(
     return _build_extraction_result(input_path, stage2_result, output_names)
 
 
+# htdemucs_6s のステム名 → 出力ラベルのマッピング
+_MULTI_STEM_LABELS: tuple[tuple[str, str], ...] = (
+    ("guitar", "guitar"),
+    ("bass", "bass"),
+    ("drums", "drums"),
+    ("piano", "keyboard"),
+    ("other", "other"),
+)
+
+
+def separate_full(
+    input_path: Path,
+    cfg: RunConfig,
+    *,
+    separator: object,
+    separate_fn: SeparateFn,
+) -> ExtractionResult:
+    """完成曲から全ステム（ギター・ベース・ドラム・キーボード・その他・リード・ハモリ）を抽出する。
+
+    Stage1: htdemucs_6s でミックスを 6 ステムに分離
+    Stage2: リード / ハモリ分離（ボーカルステムに適用）
+    """
+    import shutil
+
+    cfg.output_dir.mkdir(parents=True, exist_ok=True)
+    base_stem = input_path.stem
+
+    with intermediate_dir(cfg) as tmp_dir:
+        safe_input = _ensure_safe_input(input_path, tmp_dir)
+
+        # Stage 1: 6 ステム分離
+        logger.info("[Stage1] マルチステム分離を開始: %s", input_path.name)
+        stage1_result = separate_fn(
+            separator,
+            cfg.stage1_model.filename,
+            safe_input,
+            None,
+        )
+
+        vocal_path = _find_stem_path(stage1_result.output_paths, "Vocals")
+        if vocal_path is None:
+            raise _make_stage1_error(stage1_result.output_paths)
+
+        # 非ボーカルステムをリネームして output_dir に配置
+        stem_map: dict[str, Path] = {}
+        for p in stage1_result.output_paths:
+            if p == vocal_path:
+                continue
+            name_lower = p.name.lower()
+            for src_key, label in _MULTI_STEM_LABELS:
+                if src_key in name_lower:
+                    dst = (cfg.output_dir / f"{base_stem}_{label}{p.suffix}").resolve()
+                    if p.exists():
+                        shutil.move(str(p), dst)
+                    stem_map[label] = dst
+                    break
+
+        # ボーカルステムを中間ディレクトリに移動して Stage2 へ渡す
+        _move_to_dir((vocal_path,), tmp_dir)
+        vocal_path = tmp_dir / vocal_path.name
+
+        # Stage 2: ボーカル → リード / ハモリ
+        logger.info("[Stage2] リード / ハモリ分離を開始: %s", vocal_path.name)
+        output_names = build_output_names(base_stem, cfg)
+        stage2_result = separate_fn(
+            separator,
+            cfg.stage2_model.filename,
+            vocal_path,
+            output_names,
+        )
+
+    extraction = _build_extraction_result(input_path, stage2_result, output_names)
+    all_paths = extraction.all_output_paths + tuple(stem_map.values())
+    return ExtractionResult(
+        input_path=input_path,
+        lead_path=extraction.lead_path,
+        chorus_path=extraction.chorus_path,
+        all_output_paths=all_paths,
+        stems=stem_map,
+    )
+
+
 def extract(
     cfg: RunConfig,
     *,
@@ -125,14 +209,18 @@ def extract(
 
     for input_path in cfg.inputs:
         validate_input(input_path)
-        effective_mode = cfg.mode if cfg.mode != "auto" else "song"
+        effective_mode = cfg.mode if cfg.mode != "auto" else "full"
 
         if effective_mode == "vocal":
             result = separate_vocal(
                 input_path, cfg, separator=separator, separate_fn=separate_fn
             )
-        else:
+        elif effective_mode == "song":
             result = separate_song(
+                input_path, cfg, separator=separator, separate_fn=separate_fn
+            )
+        else:  # full
+            result = separate_full(
                 input_path, cfg, separator=separator, separate_fn=separate_fn
             )
 

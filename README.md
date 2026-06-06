@@ -1,12 +1,13 @@
 # chorus-extract
 
-楽曲・ボーカル音源からコーラス（ハモリ／バッキングボーカル）を抽出する CLI ツール。  
-[audio-separator](https://github.com/nomadkaraoke/python-audio-separator)（MIT）が提供する UVR モデル群を活用した 2 段階パイプラインで、リードボーカルとハモリを分離します。
+楽曲から **ギター・ベース・ドラム・キーボード・その他・リードボーカル・コーラス** を一括分離する CLI ツール。  
+[audio-separator](https://github.com/nomadkaraoke/python-audio-separator)（MIT）が提供するモデル群を活用したマルチステム分離パイプラインです。
 
 ## 特徴
 
-- **2 段階処理 (`--mode song`)**: ミックス済み楽曲 → ボーカル抽出 (Stage1) → リード / ハモリ分離 (Stage2)
-- **1 段階処理 (`--mode vocal`)**: ボーカル音源を直接リード / ハモリ分離
+- **Full mode（既定）**: ミックス済み楽曲 → 7 ステム同時分離（ギター / ベース / ドラム / キーボード / その他 / リード / ハモリ）
+- **Song mode**: 2 段階でリード / ハモリのみ分離（高速）
+- **Vocal mode**: ボーカル音源を直接リード / ハモリ分離（1 段階）
 - NVIDIA GPU (CUDA) による高速推論
 - モデルの自動ダウンロード・キャッシュ
 - 複数ファイルのバッチ処理
@@ -43,24 +44,27 @@ uv run chorus-extract --help
 ## 使い方
 
 ```bash
-# ミックス済み楽曲からコーラスを抽出（2 段階）
+# 楽曲から全ステム分離（既定: full mode）
+chorus-extract song.mp3
+
+# リード / ハモリのみ（song mode）
 chorus-extract --mode song song.mp3
 
-# ボーカル音源から直接分離（1 段階）
+# ボーカル音源から直接分離（vocal mode）
 chorus-extract --mode vocal vocal.wav
 
-# 複数ファイル・オプション指定
-chorus-extract --mode song --output-dir ./out --keep-intermediate -v -- song1.mp3 song2.flac
+# 複数ファイル・出力先指定
+chorus-extract -o ./out -- song1.mp3 song2.flac
 ```
 
 ### 主要オプション
 
 | オプション | デフォルト | 説明 |
 |-----------|-----------|------|
-| `--mode` | `auto` | `song`=完成曲 (2段階), `vocal`=ボーカル音源 (1段階), `auto`=自動 |
+| `--mode` | `full` | `full`=7ステム分離, `song`=ボーカル2段階, `vocal`=ボーカル1段階 |
 | `--output-dir` / `-o` | `output` | 出力ディレクトリ |
 | `--output-format` | `wav` | 出力形式 (`wav` / `mp3` / `flac` / `m4a` / `ogg`) |
-| `--stage1-model` | `bs-roformer-vocals` | Stage1 モデル名 |
+| `--stage1-model` | モード依存 | Stage1 モデル名（`--list-models` で確認） |
 | `--stage2-model` | `mel-roformer-karaoke` | Stage2 モデル名 |
 | `--model-dir` | `models` | モデルキャッシュディレクトリ |
 | `--keep-intermediate` | OFF | Stage1 の中間ステムを保持する |
@@ -74,29 +78,59 @@ chorus-extract --mode song --output-dir ./out --keep-intermediate -v -- song1.mp
 
 ## 採用モデル
 
-```
+```bash
 chorus-extract --list-models
 ```
 
+### Full mode（既定）
+
 | キー | 用途 | 説明 |
 |------|------|------|
-| `bs-roformer-vocals` | Stage1（既定） | BS-Roformer ボーカル分離 (SDR 12.97) |
-| `mel-roformer-karaoke` | Stage2（既定） | Mel-Band Roformer カラオケ aufr33/viperx (SDR 10.20) |
-| `uvr-bve` | Stage2 | UVR BVE バッキングボーカル抽出 |
-| `uvr-hp-karaoke` | Stage2 | UVR HP-Karaoke 6 |
-| `uvr-mdx-karaoke` | Stage2 | UVR MDX-Net Karaoke 2 |
+| `htdemucs-6s` | Multi-stem（既定） | Demucs v4 — 6 ステム同時分離 |
+
+### Song mode
+
+| キー | 用途 | 説明 |
+|------|------|------|
+| `mel-roformer-vocals` | Stage1（既定） | MelBand Roformer by Kimberley Jensen（vocals SDR 12.6） |
+| `bs-roformer-vocals` | Stage1 | BS-Roformer Viperx（vocals SDR 11.8） |
+
+### Stage2（全モード共通）
+
+| キー | 説明 |
+|------|------|
+| `mel-roformer-karaoke` | Mel-Band Roformer aufr33/viperx（既定） |
+| `mel-roformer-karaoke-gabox` | MelBand Roformer by Gabox V2 |
+| `mel-roformer-karaoke-becruily` | MelBand Roformer by becruily |
+| `uvr-bve` | UVR BVE バッキングボーカル抽出 |
+| `uvr-hp-karaoke` | UVR HP-Karaoke 6 |
+| `uvr-mdx-karaoke` | UVR MDX-Net Karaoke 2 |
 
 ## 出力ファイル
 
+### full mode（既定）
+
 ```
 output/
-├── {stem}_lead.wav      # リードボーカル
-└── {stem}_chorus.wav    # ハモリ（バッキングボーカル）
+├── {stem}_lead.wav       # リードボーカル
+├── {stem}_chorus.wav     # ハモリ（バッキングボーカル）
+├── {stem}_guitar.wav     # ギター
+├── {stem}_bass.wav       # ベース
+├── {stem}_drums.wav      # ドラム
+├── {stem}_keyboard.wav   # キーボード / ピアノ
+└── {stem}_other.wav      # その他
+```
+
+### song mode
+
+```
+output/
+├── {stem}_lead.wav       # リードボーカル
+└── {stem}_chorus.wav     # ハモリ（バッキングボーカル）
 
 # --keep-intermediate 指定時
 output/intermediate/
-├── {stem}_(Vocals)_*.wav        # Stage1: ボーカル抽出結果
-└── {stem}_(Instrumental)_*.wav  # Stage1: 伴奏抽出結果
+└── {stem}_(Vocals)_*.wav        # Stage1 中間ファイル
 ```
 
 ## 開発

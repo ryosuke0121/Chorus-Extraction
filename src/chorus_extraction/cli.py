@@ -15,7 +15,7 @@ from chorus_extraction.config import (
 )
 from chorus_extraction.errors import ChorusExtractionError, InvalidInputError
 from chorus_extraction.logging_setup import configure_logging
-from chorus_extraction.pipeline import extract
+from chorus_extraction.pipeline import ExtractionResult, extract
 from chorus_extraction.separator_runner import make_separator, run_separation
 
 app = typer.Typer(
@@ -34,8 +34,8 @@ def main(
     ] = None,
     mode: Annotated[
         str,
-        typer.Option("--mode", "-m", help="入力種別: song=完成曲(2段階), vocal=ボーカル音源(1段階), auto=自動"),
-    ] = "auto",
+        typer.Option("--mode", "-m", help="入力種別: full=全ステム分離(既定), song=ボーカル2段階, vocal=ボーカル音源1段階, auto=fullの別名"),
+    ] = "full",
     output_dir: Annotated[
         Path,
         typer.Option("--output-dir", "-o", help="出力ディレクトリ"),
@@ -144,20 +144,45 @@ def _run_extraction(cfg: RunConfig) -> None:
     for result in results:
         typer.echo(f"\n[OK] {result.input_path.name}")
         if result.lead_path:
-            typer.echo(f"  リード    : {result.lead_path}")
+            typer.echo(f"  リード      : {result.lead_path}")
         if result.chorus_path:
-            typer.echo(f"  ハモリ    : {result.chorus_path}")
+            typer.echo(f"  ハモリ      : {result.chorus_path}")
+        _print_stems(result)
+
+
+_STEM_LABEL_JP: dict[str, str] = {
+    "guitar": "ギター",
+    "bass": "ベース",
+    "drums": "ドラム",
+    "keyboard": "キーボード",
+    "other": "その他",
+}
+
+
+def _print_stems(result: ExtractionResult) -> None:
+    """ExtractionResult の stems（追加ステム）を表示する。stems がない場合は all_output_paths の残りを表示。"""
+    known = {result.lead_path, result.chorus_path}
+    if result.stems:
+        for label, path in result.stems.items():
+            jp = _STEM_LABEL_JP.get(label, label)
+            typer.echo(f"  {jp:<10}: {path}")
+    else:
         for p in result.all_output_paths:
-            if p not in (result.lead_path, result.chorus_path):
-                typer.echo(f"  その他   : {p}")
+            if p not in known:
+                typer.echo(f"  その他      : {p}")
 
 
 def _print_model_list() -> None:
     """モデルレジストリの一覧をフォーマットして表示する。"""
+    multi_models = {k: v for k, v in MODEL_REGISTRY.items() if v.role == "multi_stem"}
     stage1_models = {k: v for k, v in MODEL_REGISTRY.items() if v.role == "stage1"}
     stage2_models = {k: v for k, v in MODEL_REGISTRY.items() if v.role == "stage2"}
 
-    typer.echo("\n=== Stage1 モデル（ミックス → ボーカル抽出）===")
+    typer.echo("\n=== Multi-Stem モデル（full mode: ミックス → 全ステム同時分離）===")
+    for key, spec in multi_models.items():
+        typer.echo(f"  {key:<30} {spec.description}")
+
+    typer.echo("\n=== Stage1 モデル（song mode: ミックス → ボーカル抽出）===")
     for key, spec in stage1_models.items():
         typer.echo(f"  {key:<30} {spec.description}")
 
@@ -165,4 +190,7 @@ def _print_model_list() -> None:
     for key, spec in stage2_models.items():
         typer.echo(f"  {key:<30} {spec.description}")
 
-    typer.echo("\n使用例: chorus-extract song.wav --stage2-model uvr-bve")
+    typer.echo("\n使用例:")
+    typer.echo("  chorus-extract song.wav                          # full mode（既定）")
+    typer.echo("  chorus-extract song.wav --mode song              # song mode（ボーカル2段階）")
+    typer.echo("  chorus-extract song.wav --stage2-model uvr-bve   # Stage2 モデル変更")
