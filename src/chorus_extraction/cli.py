@@ -34,7 +34,11 @@ def main(
     ] = None,
     mode: Annotated[
         str,
-        typer.Option("--mode", "-m", help="入力種別: full=全ステム分離(既定), song=ボーカル2段階, vocal=ボーカル音源1段階, auto=fullの別名"),
+        typer.Option(
+            "--mode",
+            "-m",
+            help="入力種別: full=全ステム分離(既定), song=ボーカル2段階, vocal=ボーカル音源1段階, auto=fullの別名",
+        ),
     ] = "full",
     output_dir: Annotated[
         Path,
