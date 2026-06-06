@@ -120,10 +120,8 @@ def main(
     _run_extraction(cfg)
 
 
-def _run_extraction(cfg: "RunConfig") -> None:
+def _run_extraction(cfg: RunConfig) -> None:
     """分離処理を実行し結果を表示する。"""
-    from chorus_extraction.config import RunConfig
-
     try:
         separator = make_separator(
             output_dir=cfg.output_dir,
@@ -137,7 +135,7 @@ def _run_extraction(cfg: "RunConfig") -> None:
         raise typer.Exit(2) from exc
     except Exception as exc:
         typer.echo(f"予期しないエラーが発生しました: {exc}", err=True)
-        if cfg.verbosity >= 1:  # type: ignore[union-attr]
+        if cfg.verbosity >= 1:
             import traceback
             traceback.print_exc(file=sys.stderr)
         raise typer.Exit(2) from exc

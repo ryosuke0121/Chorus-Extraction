@@ -12,10 +12,12 @@ def configure_logging(verbosity: int) -> None:
     0 -> WARNING, 1 -> INFO, 2+ -> DEBUG
     """
     # Windows でシステムロケール非対応文字（例: ⧸）を含むパスを表示できるよう UTF-8 に設定
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    # macOS / Linux はデフォルトで UTF-8 のため不要
+    if sys.platform == "win32":
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
     level_map = {0: logging.WARNING, 1: logging.INFO}
     level = level_map.get(verbosity, logging.DEBUG)

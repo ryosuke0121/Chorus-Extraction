@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Extract chorus (backing vocals / harmony) from audio using UVR models"
 requires-python = ">=3.12"
 dependencies = [
-    "audio-separator[gpu]>=0.44,<0.46",
+    "audio-separator[gpu]>=0.44,<0.46; sys_platform != 'darwin'",
+    "audio-separator>=0.44,<0.46; sys_platform == 'darwin'",
     "typer>=0.12",
     "torch>=2.3",
 ]
@@ -40,7 +41,11 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
-torch = { index = "pytorch-cuda" }
+torch = [
+    # Windows / Linux x86_64: CUDA ビルド
+    { index = "pytorch-cuda", marker = "sys_platform == 'win32' or (sys_platform == 'linux' and platform_machine == 'x86_64')" },
+    # macOS: PyPI の CPU/MPS ビルドを使用（CUDA インデックスに macOS ホイールなし）
+]
 
 [tool.mypy]
 strict = true

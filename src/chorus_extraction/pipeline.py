@@ -212,15 +212,19 @@ def _make_stage1_error(output_paths: tuple[Path, ...]) -> Exception:
 
 
 def _ensure_safe_input(input_path: Path, tmp_dir: Path) -> Path:
-    """パスにシステムロケール非対応文字が含まれる場合、ASCII-safe名でコピーして返す。
+    """Windows で libsoundfile の ANSI API が CP932 非対応パスを開けない問題を回避する。
 
-    libsoundfile は ANSI API を使う場合があり、CP932 非対応文字を含むパスを開けない。
+    macOS / Linux は POSIX UTF-8 パスをそのまま扱えるため早期リターンする。
     """
     import shutil
+    import sys
+
+    if sys.platform != "win32":
+        return input_path
 
     try:
         str(input_path).encode("cp932")
-        return input_path  # 変換可能ならそのまま使う
+        return input_path
     except (UnicodeEncodeError, LookupError):
         safe_path = tmp_dir / f"input{input_path.suffix}"
         shutil.copy2(input_path, safe_path)
