@@ -21,18 +21,24 @@
 
 ## インストール
 
-```bash
-# リポジトリのクローン
-git clone https://github.com/ryosuke0121/Chorus-Extraction.git
-cd Chorus-Extraction
+[uv](https://docs.astral.sh/uv/) が必要です（未インストールの場合は公式サイトの手順に従ってください）。
 
-# 仮想環境の作成と依存関係のインストール
-uv venv --python 3.12
-uv sync
+```bash
+uv tool install git+https://github.com/ryosuke0121/Chorus-Extraction.git
 ```
 
-> **GPU 使用時**: `pyproject.toml` に PyTorch CUDA インデックスが設定済みです。  
-> `uv sync` 実行時に自動で CUDA ビルドの torch がインストールされます。
+インストール後は `chorus-extract` コマンドがそのまま使えます。
+
+> **GPU 使用時**: Windows / Linux x86_64 では CUDA 12.8 対応の PyTorch が自動でインストールされます。
+
+### 開発者向け
+
+```bash
+git clone https://github.com/ryosuke0121/Chorus-Extraction.git
+cd Chorus-Extraction
+uv sync
+uv run chorus-extract --help
+```
 
 ## 使い方
 
