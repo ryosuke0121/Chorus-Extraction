@@ -57,7 +57,7 @@ def _validate_output_filename(name: str, option: str) -> None:
         raise InvalidInputError(
             f"--{option} にパス区切り文字を含めることはできません: {name!r}"
         )
-    if ".." in name.split("/") or ".." in name.split("\\") or name == "..":
+    if ".." in name:
         raise InvalidInputError(
             f"--{option} に '..' を含めることはできません: {name!r}"
         )

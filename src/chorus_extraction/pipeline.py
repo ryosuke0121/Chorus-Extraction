@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import sys
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from chorus_extraction.audio_io import build_output_names, intermediate_dir, validate_input
 from chorus_extraction.config import RunConfig
-from chorus_extraction.separator_runner import SeparationResult
+from chorus_extraction.separator_runner import SeparationResult, SeparatorProtocol
 
 logger = logging.getLogger(__name__)
 
 # 分離関数の型エイリアス（DI / テスト用モック差替に使用）
 SeparateFn = Callable[
-    [object, str, Path, "dict[str, str] | None"],
+    [SeparatorProtocol, str, Path, "dict[str, str] | None"],
     SeparationResult,
 ]
 
@@ -39,12 +42,10 @@ def separate_vocal(
     input_path: Path,
     cfg: RunConfig,
     *,
-    separator: object,
+    separator: SeparatorProtocol,
     separate_fn: SeparateFn,
 ) -> ExtractionResult:
     """ボーカル音源（伴奏なし）からリード / ハモリを1段階で分離する。"""
-    import tempfile
-
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
     stem = input_path.stem
     output_names = build_output_names(stem, cfg)
@@ -65,7 +66,7 @@ def separate_song(
     input_path: Path,
     cfg: RunConfig,
     *,
-    separator: object,
+    separator: SeparatorProtocol,
     separate_fn: SeparateFn,
 ) -> ExtractionResult:
     """完成曲（ミックス済み）から2段階でハモリを抽出する。
@@ -127,7 +128,7 @@ def separate_full(
     input_path: Path,
     cfg: RunConfig,
     *,
-    separator: object,
+    separator: SeparatorProtocol,
     separate_fn: SeparateFn,
 ) -> ExtractionResult:
     """完成曲から全ステム（ギター・ベース・ドラム・キーボード・その他・リード・ハモリ）を抽出する。
@@ -135,8 +136,6 @@ def separate_full(
     Stage1: htdemucs_6s でミックスを 6 ステムに分離
     Stage2: リード / ハモリ分離（ボーカルステムに適用）
     """
-    import shutil
-
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
     base_stem = input_path.stem
 
@@ -198,7 +197,7 @@ def separate_full(
 def extract(
     cfg: RunConfig,
     *,
-    separator: object,
+    separator: SeparatorProtocol,
     separate_fn: SeparateFn,
 ) -> list[ExtractionResult]:
     """RunConfig に含まれる全入力ファイルを処理して結果リストを返す。
@@ -304,9 +303,6 @@ def _ensure_safe_input(input_path: Path, tmp_dir: Path) -> Path:
 
     macOS / Linux は POSIX UTF-8 パスをそのまま扱えるため早期リターンする。
     """
-    import shutil
-    import sys
-
     if sys.platform != "win32":
         return input_path
 
@@ -322,8 +318,6 @@ def _ensure_safe_input(input_path: Path, tmp_dir: Path) -> Path:
 
 def _move_to_dir(paths: tuple[Path, ...], dest: Path) -> None:
     """ファイル群を dest ディレクトリに移動する。同名ファイルが存在する場合は警告する。"""
-    import shutil
-
     for p in paths:
         if not p.exists():
             continue

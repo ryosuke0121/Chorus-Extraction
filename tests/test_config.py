@@ -22,6 +22,7 @@ class TestModelRegistry:
     def test_default_models_exist(self) -> None:
         assert DEFAULT_STAGE1_MODEL in MODEL_REGISTRY
         assert DEFAULT_STAGE2_MODEL in MODEL_REGISTRY
+        assert DEFAULT_MULTI_STEM_MODEL in MODEL_REGISTRY
 
     def test_stage_roles(self) -> None:
         for spec in MODEL_REGISTRY.values():

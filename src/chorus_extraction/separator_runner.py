@@ -5,8 +5,23 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol, cast
 
 logger = logging.getLogger(__name__)
+
+
+class SeparatorProtocol(Protocol):
+    """audio-separator の Separator が満たすべきインターフェース。"""
+
+    output_dir: str
+
+    def load_model(self, model_filename: str) -> None: ...
+
+    def separate(
+        self,
+        audio_file: str,
+        custom_output_names: dict[str, str] | None = None,
+    ) -> list[str]: ...
 
 
 @dataclass(frozen=True)
@@ -24,7 +39,7 @@ def make_separator(
     model_dir: Path,
     device: str,
     output_single_stem: str | None = None,
-) -> object:
+) -> SeparatorProtocol:
     """Separator インスタンスを生成して返す。
 
     use_autocast は CUDA 時のみ有効（CPU では AttributeError になるため False）。
@@ -49,7 +64,7 @@ def make_separator(
     use_autocast = device == "cuda"
 
     try:
-        sep: object = Separator(
+        sep = Separator(
             output_dir=str(output_dir.resolve()),
             output_format=output_format,
             model_file_dir=str(model_dir.resolve()),
@@ -62,11 +77,11 @@ def make_separator(
             f"\nモデルキャッシュディレクトリ: {model_dir}"
         ) from exc
 
-    return sep
+    return cast(SeparatorProtocol, sep)
 
 
 def run_separation(
-    separator: object,
+    separator: SeparatorProtocol,
     model_filename: str,
     input_path: Path,
     output_names: dict[str, str] | None = None,
@@ -90,7 +105,7 @@ def run_separation(
 
     logger.info("モデルをロードしています: %s", model_filename)
     try:
-        separator.load_model(model_filename=model_filename)  # type: ignore[attr-defined]
+        separator.load_model(model_filename=model_filename)
     except Exception as exc:
         raise ModelDownloadError(
             f"モデルのロードに失敗しました: {model_filename}"
@@ -101,7 +116,7 @@ def run_separation(
     abs_input = input_path.resolve()
     logger.info("分離処理を開始します: %s", abs_input.name)
     try:
-        raw_outputs: list[str] = separator.separate(  # type: ignore[attr-defined]
+        raw_outputs: list[str] = separator.separate(
             str(abs_input),
             custom_output_names=output_names,
         )
@@ -113,7 +128,7 @@ def run_separation(
 
     # audio-separator は相対パス（ファイル名のみ）を返す場合がある。
     # separator.output_dir を基準に絶対パスへ解決する。
-    sep_output_dir = Path(getattr(separator, "output_dir", "."))
+    sep_output_dir = Path(separator.output_dir)
     resolved: list[Path] = []
     for p in raw_outputs:
         path = Path(p)

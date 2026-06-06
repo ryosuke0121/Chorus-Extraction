@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # 型エイリアス
@@ -139,11 +142,7 @@ def resolve_device(requested: Device) -> Device:
     "auto" の場合は CUDA の利用可否を検出し、不可なら警告して "cpu" を返す。
     "cuda" を明示して利用不可なら DeviceUnavailableError を送出。
     """
-    import logging
-
     from chorus_extraction.errors import DeviceUnavailableError
-
-    logger = logging.getLogger(__name__)
 
     if requested == "cpu":
         return "cpu"
@@ -173,10 +172,6 @@ def resolve_device(requested: Device) -> Device:
 
 def _check_cuda() -> bool:
     """CUDA が利用可能かどうかを判定する。"""
-    import logging
-
-    _logger = logging.getLogger(__name__)
-
     try:
         import torch
 
@@ -184,7 +179,7 @@ def _check_cuda() -> bool:
     except ImportError:
         pass
     except Exception as exc:
-        _logger.debug("torch による CUDA 検出に失敗しました: %s", exc)
+        logger.debug("torch による CUDA 検出に失敗しました: %s", exc)
 
     try:
         import onnxruntime
@@ -193,7 +188,7 @@ def _check_cuda() -> bool:
     except ImportError:
         pass
     except Exception as exc:
-        _logger.debug("onnxruntime による CUDA 検出に失敗しました: %s", exc)
+        logger.debug("onnxruntime による CUDA 検出に失敗しました: %s", exc)
 
     return False
 
