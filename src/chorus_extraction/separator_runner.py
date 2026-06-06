@@ -39,7 +39,7 @@ def make_separator(
     from chorus_extraction.errors import ModelDownloadError
 
     try:
-        from audio_separator.separator import Separator  # type: ignore[import]
+        from audio_separator.separator import Separator
     except ImportError as exc:
         raise ModelDownloadError(
             "audio-separator がインストールされていません。"

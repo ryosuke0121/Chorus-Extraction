@@ -148,7 +148,7 @@ def _check_cuda() -> bool:
     _logger = logging.getLogger(__name__)
 
     try:
-        import torch  # type: ignore[import]
+        import torch
 
         return bool(torch.cuda.is_available())
     except ImportError:
@@ -157,7 +157,7 @@ def _check_cuda() -> bool:
         _logger.debug("torch による CUDA 検出に失敗しました: %s", exc)
 
     try:
-        import onnxruntime  # type: ignore[import]
+        import onnxruntime
 
         return "CUDAExecutionProvider" in onnxruntime.get_available_providers()
     except ImportError:

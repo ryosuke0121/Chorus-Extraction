@@ -20,12 +20,13 @@ chorus-extract = "chorus_extraction.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/chorus_extraction"]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
+    "mypy>=1.10",
     "pytest>=8,<9",
     "pytest-cov>=5",
     "pytest-mock>=3",
-    "mypy>=1.10",
+    "ruff>=0.4",
 ]
 
 [tool.pytest.ini_options]
@@ -54,9 +55,13 @@ ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py312"
-line-length = 100
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "N", "ANN", "S", "B", "SIM", "RUF"]
-ignore = ["ANN101", "ANN102"]
+# RUF001/002/003: 日本語の全角括弧（）は意図的な表記
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ANN001", "ANN002", "ANN201", "ANN202", "E501"]
 

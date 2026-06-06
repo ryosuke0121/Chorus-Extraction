@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
 from chorus_extraction.config import (
     MODEL_REGISTRY,
+    RunConfig,
     build_run_config,
 )
 from chorus_extraction.errors import ChorusExtractionError, InvalidInputError
@@ -28,7 +29,7 @@ app = typer.Typer(
 def main(
     ctx: typer.Context,
     inputs: Annotated[
-        Optional[list[Path]],
+        list[Path] | None,
         typer.Argument(help="入力音声ファイル（複数指定可）"),
     ] = None,
     mode: Annotated[
@@ -44,11 +45,11 @@ def main(
         typer.Option("--output-format", help="出力フォーマット（wav/mp3/flac/m4a/ogg）"),
     ] = "wav",
     stage1_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--stage1-model", help="Stage1 モデル名（--list-models で確認）"),
     ] = None,
     stage2_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--stage2-model", help="Stage2 モデル名（--list-models で確認）"),
     ] = None,
     model_dir: Annotated[

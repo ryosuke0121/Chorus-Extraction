@@ -40,9 +40,8 @@ class TestResolveDevice:
             assert resolve_device("auto") == "cpu"
 
     def test_cuda_explicit_unavailable_raises(self) -> None:
-        with patch("chorus_extraction.config._check_cuda", return_value=False):
-            with pytest.raises(DeviceUnavailableError):
-                resolve_device("cuda")
+        with patch("chorus_extraction.config._check_cuda", return_value=False), pytest.raises(DeviceUnavailableError):
+            resolve_device("cuda")
 
     def test_cuda_explicit_available(self) -> None:
         with patch("chorus_extraction.config._check_cuda", return_value=True):

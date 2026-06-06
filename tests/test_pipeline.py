@@ -10,7 +10,6 @@ import pytest
 from chorus_extraction.config import build_run_config
 from chorus_extraction.errors import SeparationError
 from chorus_extraction.pipeline import extract, separate_song, separate_vocal
-from chorus_extraction.separator_runner import SeparationResult
 
 
 def _make_cfg(tmp_path: Path, mode: str = "vocal", keep_intermediate: bool = False):

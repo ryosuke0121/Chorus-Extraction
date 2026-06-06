@@ -15,9 +15,9 @@ def configure_logging(verbosity: int) -> None:
     # macOS / Linux はデフォルトで UTF-8 のため不要
     if sys.platform == "win32":
         if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         if hasattr(sys.stderr, "reconfigure"):
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
     level_map = {0: logging.WARNING, 1: logging.INFO}
     level = level_map.get(verbosity, logging.DEBUG)
