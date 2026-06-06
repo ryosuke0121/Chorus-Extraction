@@ -52,7 +52,8 @@ def _validate_output_filename(name: str, option: str) -> None:
     """出力ファイル名にディレクトリ区切り文字や `..` が含まれないことを検証する。"""
     import os
 
-    if any(sep in name for sep in (os.sep, os.altsep or "", "/", "\\")):
+    seps = filter(None, (os.sep, os.altsep, "/", "\\"))
+    if any(sep in name for sep in seps):
         raise InvalidInputError(
             f"--{option} にパス区切り文字を含めることはできません: {name!r}"
         )
