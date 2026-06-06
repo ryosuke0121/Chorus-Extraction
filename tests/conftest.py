@@ -20,18 +20,32 @@ def mock_separator() -> MagicMock:
 
 @pytest.fixture()
 def make_separate_fn(tmp_path: Path):
-    """指定したステムファイルを tmp_path に作成して返す SeparateFn スタブを生成するファクトリ。
+    """呼び出しごとに異なるステムファイルを返す SeparateFn スタブを生成するファクトリ。
 
-    Usage:
-        separate_fn = make_separate_fn(["song_Vocals.wav", "song_Instrumental.wav"])
+    各引数がひとつのステージに対応するファイル名リスト。呼び出し順に対応するステージの
+    パスを返す。ステージ数を超えた呼び出しは最後のステージのパスを繰り返す。
+
+    Usage（1段階）:
+        fn = make_separate_fn(["lead.wav", "chorus.wav"])
+
+    Usage（2段階）:
+        fn = make_separate_fn(
+            ["song_Vocals.wav", "song_Instrumental.wav"],  # Stage1
+            ["song_lead.wav",   "song_chorus.wav"],        # Stage2
+        )
     """
 
-    def factory(stem_names: list[str]):
-        created: list[Path] = []
-        for name in stem_names:
-            p = tmp_path / name
-            p.write_bytes(b"FAKE_AUDIO")
-            created.append(p)
+    def factory(*stages: list[str]):
+        all_stages: list[tuple[Path, ...]] = []
+        for stage_names in stages:
+            paths: list[Path] = []
+            for name in stage_names:
+                p = tmp_path / name
+                p.write_bytes(b"FAKE_AUDIO")
+                paths.append(p)
+            all_stages.append(tuple(paths))
+
+        call_index = 0
 
         def stub(
             separator: object,
@@ -39,9 +53,12 @@ def make_separate_fn(tmp_path: Path):
             input_path: Path,
             output_names: dict[str, str] | None = None,
         ) -> SeparationResult:
+            nonlocal call_index
+            idx = min(call_index, len(all_stages) - 1)
+            call_index += 1
             return SeparationResult(
                 input_path=input_path,
-                output_paths=tuple(created),
+                output_paths=all_stages[idx],
             )
 
         return stub

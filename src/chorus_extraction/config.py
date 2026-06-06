@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 # ---------------------------------------------------------------------------
 # 型エイリアス
@@ -236,14 +236,14 @@ def build_run_config(
 
     return RunConfig(
         inputs=tuple(inputs),
-        mode=mode,  # type: ignore[arg-type]
+        mode=cast(Mode, mode),
         output_dir=output_dir,
-        output_format=output_format,  # type: ignore[arg-type]
+        output_format=cast(OutputFormat, output_format),
         stage1_model=MODEL_REGISTRY[s1_key],
         stage2_model=MODEL_REGISTRY[s2_key],
         model_dir=model_dir,
         keep_intermediate=keep_intermediate,
-        device=resolve_device(device),  # type: ignore[arg-type]
+        device=resolve_device(cast(Device, device)),
         lead_name_template=lead_name_template,
         chorus_name_template=chorus_name_template,
         verbosity=verbosity,
