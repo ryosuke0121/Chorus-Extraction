@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: ChorusExtract-windows-x64.zip
+          - os: macos-latest
+            asset: ChorusExtract-macos-arm64.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      # CUDA 版 torch は同梱すると 2GB のリリースアセット上限を超えるため PyPI の CPU 版でビルドする
+      # （Windows の PyPI torch は CPU ビルド）。GPU で使う場合は `uv tool install` を案内する。
+      # pip だと diffq-fixed の sdist ビルドが失敗するため uv を使う。
+      - name: Install dependencies (CPU torch)
+        shell: bash
+        run: |
+          uv venv build-venv --python 3.12
+          uv pip install --python build-venv torch "audio-separator>=0.44,<0.46" "typer>=0.12" pyinstaller
+          uv pip install --python build-venv --no-deps .
+          echo "$PWD/build-venv/bin" >> "$GITHUB_PATH"
+          echo "$PWD/build-venv/Scripts" >> "$GITHUB_PATH"
+
+      - name: Build with PyInstaller
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name ChorusExtract \
+            --collect-all audio_separator \
+            --copy-metadata audio-separator \
+            src/chorus_extraction/gui.py
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/ChorusExtract -DestinationPath ${{ matrix.asset }}
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/ChorusExtract.app ${{ matrix.asset }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.asset }}
+          body: |
+            CPU 版バイナリです（GPU 非対応）。NVIDIA GPU で高速処理する場合は `uv tool install chorus-extraction` を使用してください。
+            macOS: 初回起動時は右クリック → 開く（未署名のため Gatekeeper の警告が出ます）。
